@@ -20,7 +20,7 @@ static void update_node_height(User* node) {
 
 static int get_balance_factor(User* node) {
     if (!node) return 0;
-    return get_node_height(node->left) - get_node_height(node->right);
+    return get_node_height(node->right) - get_node_height(node->left);
 }
 
 static void rotate_left(User** node_ptr) {
@@ -29,7 +29,7 @@ static void rotate_left(User** node_ptr) {
     next_root->left = *node_ptr;
     *node_ptr = next_root;
 
-    update_node_height((*node_ptr)->right);
+    update_node_height((*node_ptr)->left);
     update_node_height(*node_ptr);
 }
 
@@ -41,6 +41,16 @@ static void rotate_right(User** node_ptr) {
 
     update_node_height((*node_ptr)->right);
     update_node_height(*node_ptr);
+}
+
+static void double_rotate_right(User** node_ptr) {
+    rotate_left(&(*node_ptr)->left);
+    rotate_right(node_ptr);
+}
+
+static void double_rotate_left(User** node_ptr) {
+    rotate_right(&(*node_ptr)->right);
+    rotate_left(node_ptr);
 }
 
 static User* create_node(const char* name, const char* email) {
@@ -62,11 +72,7 @@ static User* create_node(const char* name, const char* email) {
         return NULL;
     }
 
-    new_user->name = user_name;
-    new_user->email = user_email;
-    new_user->id = actual_id++;
-    new_user->height = 0;
-    new_user->left = new_user->right = NULL;
+    *new_user = (User) {.name = user_name, .email = user_email, .id = actual_id++, .height = 1, .left = NULL, .right = NULL};
     return new_user;
 }
 
@@ -77,24 +83,120 @@ static bool recursive_register_user(User** node_ptr, const char* name, const cha
 
         *node_ptr = new_user; 
         return true;
+    } 
+
+    bool inserted = false;
+    int comparation_result = strcmp(name, (*node_ptr)->name);
+    if (comparation_result > 0) {
+        inserted = recursive_register_user(&(*node_ptr)->right, name, email);
+    } else if (comparation_result < 0) {
+        inserted = recursive_register_user(&(*node_ptr)->left, name, email);
     } else {
-        int comparation_result = strcmp(name, (*node_ptr)->name);
-        if (comparation_result > 0) {
-            recursive_register_user(&(*node_ptr)->right, name, email);
-        } else if (comparation_result < 0) {
-            recursive_register_user(&(*node_ptr)->left, name, email);
-        } else {
-            return false;
+        return false;
+    }
+
+    if (inserted) {
+        update_node_height(*node_ptr);
+
+        int balance_factor = get_balance_factor(*node_ptr);
+
+        if (balance_factor > 1) {
+            if (strcmp(name, (*node_ptr)->right->name) > 0) {
+                rotate_left(node_ptr);
+            } else {
+                double_rotate_left(node_ptr);
+            }
+        } else if (balance_factor < -1) {
+            if (strcmp(name, (*node_ptr)->left->name) < 0) {
+                rotate_right(node_ptr);
+            } else {
+                double_rotate_right(node_ptr);
+            }
         }
     }
+    return inserted;
 }
 
 bool register_user(Users* users, const char* name, const char* email) {
     return users && name && email ? recursive_register_user(&users->root, name, email) : false;
 }
 
-void remove_user(Users* users, const char* target_name) {
-    printf("\nTODO");
+static User* get_min_node(User* root) {;
+    while (root && root->left) {
+        root = root->left;
+    }
+    return root;
+}
+
+static bool recursive_remove_user(User** node_ptr, const char* target_name) {
+    if (!*node_ptr) {
+        printf("\nNo user named %s was not found...\n", target_name);
+        return false;
+    }
+
+    bool removed = false;
+    int comparation_result = strcmp(target_name, (*node_ptr)->name);
+
+    if (comparation_result > 0) {
+        removed = recursive_remove_user(&(*node_ptr)->right, target_name);
+    } else if (comparation_result < 0) {
+        removed = recursive_remove_user(&(*node_ptr)->left, target_name);
+    } else {
+        User* right = (*node_ptr)->right;
+        User* left = (*node_ptr)->left;
+
+        if (right && left) {
+            User* right_min = get_min_node(right);
+            char* temp_name = strdup(right_min->name);
+            char* temp_email = strdup(right_min->email);
+
+            if (!temp_name || !temp_email) {
+                free(temp_name);
+                free(temp_email);
+                return false; 
+            }
+
+            free((*node_ptr)->name);
+            free((*node_ptr)->email);
+            (*node_ptr)->name = temp_name;
+            (*node_ptr)->email = temp_email;
+            (*node_ptr)->id = right_min->id;
+            (*node_ptr)->height = right_min->height;
+
+            removed = recursive_remove_user(&(*node_ptr)->right, right_min->name);
+        } else {
+            User* temp = *node_ptr;
+            *node_ptr = right ? right : left;
+            free(temp->name);
+            free(temp->email);
+            free(temp);
+            removed = true;
+        }
+    }
+
+    if (removed && *node_ptr) {
+        update_node_height(*node_ptr);
+        int balance_factor = get_balance_factor(*node_ptr);
+
+        if (balance_factor > 1) {
+            if (get_balance_factor((*node_ptr)->right) >= 0) {
+                rotate_left(node_ptr);
+            } else {
+                double_rotate_left(node_ptr);
+            }
+        } else if (balance_factor < -1) {
+            if (get_balance_factor((*node_ptr)->left) <= 0) {
+                rotate_right(node_ptr);
+            } else {
+                double_rotate_right(node_ptr);
+            }
+        }
+    }
+    return removed;
+}
+
+bool remove_user(Users* users, const char* target_name) {
+    return users && target_name ? recursive_remove_user(&users->root, target_name) : false;
 }
 
 static void recursive_search_user(User* node, const char* name) {
@@ -157,4 +259,8 @@ Users* create_users_tree() {
     Users* new_users_tree = (Users*) malloc(sizeof (Users));
     new_users_tree->root = NULL;
     return new_users_tree;
+}
+
+void get_head_name(Users* users) {
+    printf("%s", users->root->name);
 }

@@ -19,7 +19,7 @@ typedef struct {
 Users* create_users_tree(void);
 void free_users_tree(Users* users);
 bool register_user(Users* users, const char* name, const char* email);
-void remove_user(Users* users, const char* target_name);
+bool remove_user(Users* users, const char* target_name);
 void search_user(Users* users, const char* target_name);
 void ordered_list_users(Users* users);
 

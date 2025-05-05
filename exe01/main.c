@@ -43,8 +43,8 @@ int main() {
                 break;
                 
             case REMOVE_USER:
-                // printf("\nProvide a name: ");
-                // scanf("\n%99[^\n]", name);
+                printf("\nProvide a name: ");
+                scanf("\n%99[^\n]", name);
 
                 remove_user(users, name);
                 break;
